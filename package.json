@@ -1,0 +1,22 @@
+{
+  "name": "mcumgr-web",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run tests/unit/",
+    "test:device": "vitest run tests/device/",
+    "test:all": "vitest run tests/"
+  },
+  "dependencies": {
+    "cbor-x": "^1.6"
+  },
+  "devDependencies": {
+    "@types/w3c-web-hid": "^1.0.6",
+    "node-hid": "^3.1",
+    "typescript": "^5.7",
+    "vitest": "^4.0.18"
+  }
+}
