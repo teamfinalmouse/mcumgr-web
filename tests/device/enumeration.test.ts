@@ -13,13 +13,13 @@ describe('USB enumeration', () => {
     expect(present).toBe(true);
   });
 
-  test('has ≥2 HID interfaces (boot mouse 0 + vendor 1)', () => {
+  test('has a vendor HID collection on usage page 0xff00 / usage 0x01', () => {
     const devices = HID.devices(vid, pid);
-    expect(devices.length).toBeGreaterThanOrEqual(2);
-
-    const ifaces = devices.map((d) => d.interface).sort();
-    expect(ifaces).toContain(0); // boot mouse
-    expect(ifaces).toContain(1); // vendor HID
+    const vendorHid = devices.find(
+      (d) => d.usagePage === 0xff00 && d.usage === 0x01,
+    );
+    expect(vendorHid).toBeDefined();
+    expect(vendorHid?.path).toBeTruthy();
   });
 
   test('manufacturer string is "Finalmouse"', () => {

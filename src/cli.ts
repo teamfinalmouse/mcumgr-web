@@ -29,12 +29,10 @@ function parseHash(hex: string): Uint8Array {
 function openTransport(opts: {
   vid: string;
   pid: string;
-  iface: string;
 }): NodeHidTransport {
   return new NodeHidTransport({
     vid: hexToNumber(opts.vid),
     pid: hexToNumber(opts.pid),
-    iface: parseInt(opts.iface, 10),
   });
 }
 
@@ -42,8 +40,7 @@ program
   .name('mcumgr-web')
   .description('MCUmgr operations over USB HID')
   .option('--vid <hex>', 'USB Vendor ID', '361d')
-  .option('--pid <hex>', 'USB Product ID', '0300')
-  .option('--iface <num>', 'HID interface number', '1');
+  .option('--pid <hex>', 'USB Product ID', '0300');
 
 program
   .command('echo <message>')

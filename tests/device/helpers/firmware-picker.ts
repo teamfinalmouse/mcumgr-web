@@ -10,7 +10,6 @@ function openTransport(): NodeHidTransport {
   return new NodeHidTransport({
     vid: config.vid,
     pid: config.pid,
-    iface: config.iface,
     reportIdOut: config.reportIdOut,
     reportIdIn: config.reportIdIn,
   });

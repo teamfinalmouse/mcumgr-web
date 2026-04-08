@@ -22,7 +22,6 @@ describe('transport robustness', () => {
     const transport = new NodeHidTransport({
       vid,
       pid,
-      iface: config.iface,
       reportIdOut: config.reportIdOut,
       reportIdIn: config.reportIdIn,
     });
@@ -64,7 +63,6 @@ describe('transport robustness', () => {
     const transport = new NodeHidTransport({
       vid,
       pid,
-      iface: config.iface,
       reportIdOut: config.reportIdOut,
       reportIdIn: config.reportIdIn,
     });

@@ -15,8 +15,6 @@ export const config = {
   vid: envInt('MCUMGR_VID', 0x361d),
   /** USB Product ID (dongle app) */
   pid: envInt('MCUMGR_PID', 0x0300),
-  /** Vendor HID interface number */
-  iface: envInt('MCUMGR_IFACE', 1),
   /** HID OUT report ID */
   reportIdOut: envInt('MCUMGR_REPORT_ID_OUT', 3),
   /** HID IN report ID */

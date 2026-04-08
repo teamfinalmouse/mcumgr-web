@@ -16,13 +16,18 @@ import type { Transport } from './transport.js';
 const FRAME_HDR_SIZE = 1;
 const PAYLOAD_SIZE = 62;
 const RAW_REPORT_DATA = FRAME_HDR_SIZE + PAYLOAD_SIZE; // 63
+const VENDOR_USAGE_PAGE = 0xff00;
+const VENDOR_USAGE = 0x01;
 
-/** Find the hidraw path for a specific vendor HID interface. */
-export function findDevicePath(
-  vid: number,
-  pid: number,
-  iface: number,
-): string {
+function isVendorHidDevice(device: HID.Device): boolean {
+  return (
+    device.usagePage === VENDOR_USAGE_PAGE &&
+    device.usage === VENDOR_USAGE
+  );
+}
+
+/** Find the hidraw path for the MCUmgr vendor HID collection. */
+export function findDevicePath(vid: number, pid: number): string {
   const devices = HID.devices(vid, pid);
   if (devices.length === 0) {
     throw new Error(
@@ -31,16 +36,21 @@ export function findDevicePath(
   }
 
   for (const d of devices) {
-    if (d.interface === iface && d.path) {
+    if (isVendorHidDevice(d) && d.path) {
       return d.path;
     }
   }
 
-  const ifaces = devices.map((d) => d.interface);
+  const deviceSummary = devices
+    .map(
+      (d) =>
+        `iface=${d.interface} usagePage=0x${(d.usagePage ?? 0).toString(16)} usage=0x${(d.usage ?? 0).toString(16)}`,
+    )
+    .join(', ');
   throw new Error(
-    `Vendor HID interface ${iface} not found for ` +
+    `Vendor HID usagePage=0x${VENDOR_USAGE_PAGE.toString(16)} usage=0x${VENDOR_USAGE.toString(16)} not found for ` +
       `${vid.toString(16).padStart(4, '0')}:${pid.toString(16).padStart(4, '0')}. ` +
-      `Found interfaces: [${ifaces.join(', ')}]`,
+      `Found devices: [${deviceSummary}]`,
   );
 }
 
@@ -55,19 +65,17 @@ export class NodeHidTransport implements Transport {
   constructor(options: {
     vid: number;
     pid: number;
-    iface?: number;
     reportIdOut?: number;
     reportIdIn?: number;
     readTimeoutMs?: number;
     mtu?: number;
   }) {
-    const iface = options.iface ?? 1;
     this.reportIdOut = options.reportIdOut ?? 3;
     this.reportIdIn = options.reportIdIn ?? 4;
     this.readTimeoutMs = options.readTimeoutMs ?? 30_000;
     this._mtu = options.mtu ?? 512;
 
-    const path = findDevicePath(options.vid, options.pid, iface);
+    const path = findDevicePath(options.vid, options.pid);
     this.dev = new HID.HID(path);
   }
 
