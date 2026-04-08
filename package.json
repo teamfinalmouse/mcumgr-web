@@ -2,15 +2,31 @@
   "name": "mcumgr-web",
   "version": "0.1.0",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
   },
   "bin": {
     "mcumgr-web": "./src/cli.ts"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "build:cli": "bun build --compile src/cli.ts --outfile mcumgr-web",
     "cli": "bun src/cli.ts",
+    "prepare": "npm run build",
     "test": "vitest run tests/unit/",
     "test:device": "vitest run tests/device/",
     "test:all": "vitest run tests/"

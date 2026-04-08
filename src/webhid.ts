@@ -30,6 +30,7 @@ export interface WebHidOptions {
   reportIdIn?: number;
   timeoutMs?: number;
   mtu?: number;
+  closeDeviceOnClose?: boolean;
 }
 
 export class WebHidTransport implements Transport {
@@ -38,6 +39,7 @@ export class WebHidTransport implements Transport {
   private reportIdIn: number;
   private timeoutMs: number;
   private _mtu: number;
+  private closeDeviceOnClose: boolean;
   private seq = 0;
 
   private constructor(device: HIDDevice, options?: WebHidOptions) {
@@ -46,6 +48,7 @@ export class WebHidTransport implements Transport {
     this.reportIdIn = options?.reportIdIn ?? DEFAULT_REPORT_ID_IN;
     this.timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this._mtu = options?.mtu ?? DEFAULT_MTU;
+    this.closeDeviceOnClose = options?.closeDeviceOnClose ?? true;
   }
 
   /** Prompt user to select a HID device and open it. */
@@ -76,7 +79,9 @@ export class WebHidTransport implements Transport {
   }
 
   async close(): Promise<void> {
-    await this.device.close();
+    if (this.closeDeviceOnClose && this.device.opened) {
+      await this.device.close();
+    }
   }
 
   async transceive(
