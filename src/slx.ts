@@ -8,6 +8,7 @@ export const SLX_USAGE_PAGE = 0xff00;
 export const SLX_USAGE = 0x01;
 export const SLX_REPORT_ID_OUT = 0x03;
 export const SLX_REPORT_ID_IN = 0x04;
+export const SLX_UPLOAD_MTU = 512;
 
 const DEFAULT_RECONNECT_TIMEOUT_MS = 30_000;
 const DEFAULT_POLL_INTERVAL_MS = 500;
@@ -92,6 +93,7 @@ export class SlxFirmwareUpdater {
     this.transportOptions = {
       reportIdOut: options?.reportIdOut ?? SLX_REPORT_ID_OUT,
       reportIdIn: options?.reportIdIn ?? SLX_REPORT_ID_IN,
+      mtu: options?.mtu ?? SLX_UPLOAD_MTU,
       ...options,
       closeDeviceOnClose: false,
     };
@@ -131,7 +133,8 @@ export class SlxFirmwareUpdater {
         signal: options?.signal,
       });
 
-      await client.imageTest(await computeImageHash(firmware));
+      const uploadedImage = await findUploadedImage(client);
+      await client.imageTest(uploadedImage.hash);
       options?.onPhaseChange?.('rebooting');
       await client.reset();
     } finally {
@@ -199,12 +202,13 @@ export class SlxFirmwareUpdater {
   }
 }
 
-async function computeImageHash(data: Uint8Array): Promise<Uint8Array> {
-  const hashBuf = await crypto.subtle.digest(
-    'SHA-256',
-    new Uint8Array(data) as unknown as BufferSource,
-  );
-  return new Uint8Array(hashBuf);
+async function findUploadedImage(client: McuMgrClient) {
+  const state = await client.imageList();
+  const uploaded = state.images.find((image) => !image.active) ?? state.images[1];
+  if (!uploaded) {
+    throw new McuMgrError('Uploaded image was not reported by the device');
+  }
+  return uploaded;
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
