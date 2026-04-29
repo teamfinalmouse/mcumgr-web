@@ -24,6 +24,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:bundle": "bun build src/index.ts --outfile dist/mcumgr-web.js --target browser --format esm --minify && bun build src/global.ts --outfile dist/mcumgr-web.iife.js --target browser --format iife --minify",
+    "build:all": "npm run build && npm run build:bundle",
     "build:cli": "bun build --compile src/cli.ts --outfile mcumgr-web",
     "cli": "bun src/cli.ts",
     "prepare": "npm run build",
