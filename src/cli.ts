@@ -1,10 +1,12 @@
-#!/usr/bin/env bun
-// mcumgr-web CLI — MCUmgr operations over USB HID.
+#!/usr/bin/env node
+// mcumgr-web CLI — MCUmgr operations over USB HID or MCUboot serial recovery.
 
 import { program } from 'commander';
 import { readFileSync } from 'fs';
 import { McuMgrClient } from './client.js';
 import { NodeHidTransport } from './node-hid.js';
+import { NodeSerialTransport } from './node-serial.js';
+import type { Transport } from './transport.js';
 
 function hexToNumber(value: string): number {
   return parseInt(value, 16);
@@ -26,28 +28,49 @@ function parseHash(hex: string): Uint8Array {
   return new Uint8Array(hex.match(/.{2}/g)!.map((b) => parseInt(b, 16)));
 }
 
-function openTransport(opts: {
-  vid: string;
-  pid: string;
-}): NodeHidTransport {
+interface CliOpts {
+  vid?: string;
+  pid?: string;
+  serial?: string;
+  baud?: string;
+  mtu?: string;
+  lineLength?: string;
+}
+
+async function openTransport(raw: Record<string, unknown>): Promise<Transport> {
+  const opts = raw as CliOpts;
+  if (opts.serial) {
+    const t = new NodeSerialTransport({
+      path: opts.serial,
+      baudRate: opts.baud ? parseInt(opts.baud, 10) : undefined,
+      lineLength: opts.lineLength ? parseInt(opts.lineLength, 10) : undefined,
+      mtu: opts.mtu ? parseInt(opts.mtu, 10) : undefined,
+    });
+    await t.ready();
+    return t;
+  }
   return new NodeHidTransport({
-    vid: hexToNumber(opts.vid),
-    pid: hexToNumber(opts.pid),
+    vid: hexToNumber(opts.vid ?? '361d'),
+    pid: hexToNumber(opts.pid ?? '0300'),
   });
 }
 
 program
   .name('mcumgr-web')
-  .description('MCUmgr operations over USB HID')
-  .option('--vid <hex>', 'USB Vendor ID', '361d')
-  .option('--pid <hex>', 'USB Product ID', '0300');
+  .description('MCUmgr operations over USB HID or serial (MCUboot recovery)')
+  .option('--vid <hex>', 'USB Vendor ID (HID)', '361d')
+  .option('--pid <hex>', 'USB Product ID (HID)', '0300')
+  .option('-s, --serial <path>', 'Serial device path (CDC-ACM)')
+  .option('-b, --baud <n>', 'Serial baud rate', '115200')
+  .option('--line-length <n>', 'Serial line length', '128')
+  .option('--mtu <n>', 'Serial MTU');
 
 program
   .command('echo <message>')
   .description('Send an echo message')
   .action(async (message: string) => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const reply = await client.echo(message);
@@ -63,7 +86,7 @@ program
   .option('-f, --format <format>', 'info format string')
   .action(async (cmdOpts: { format?: string }) => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const output = await client.osInfo(cmdOpts.format);
@@ -78,7 +101,7 @@ program
   .description('Show bootloader info')
   .action(async () => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const info = await client.bootloaderInfo();
@@ -96,7 +119,7 @@ program
   .description('Show OS task statistics')
   .action(async () => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const resp = await client.taskstat();
@@ -115,7 +138,7 @@ program
   .description('Show MCUmgr buffer parameters')
   .action(async () => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const params = await client.mcumgrParams();
@@ -131,7 +154,7 @@ program
   .description('List image slots')
   .action(async () => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       const state = await client.imageList();
@@ -159,7 +182,7 @@ program
   .description('Upload firmware image')
   .action(async (file: string) => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const data = new Uint8Array(readFileSync(file));
       console.log(`Uploading ${file} (${data.length} bytes)`);
@@ -187,7 +210,7 @@ program
   .action(async (hashHex: string) => {
     const hash = parseHash(hashHex);
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       await client.imageTest(hash);
@@ -202,7 +225,7 @@ program
   .description('Erase image slot')
   .action(async (slot?: string) => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       await client.imageErase(slot !== undefined ? parseInt(slot, 10) : undefined);
@@ -217,7 +240,7 @@ program
   .description('Reset device')
   .action(async () => {
     const opts = program.opts();
-    const transport = openTransport(opts);
+    const transport = await openTransport(opts);
     try {
       const client = new McuMgrClient(transport);
       await client.reset();

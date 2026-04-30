@@ -9,5 +9,5 @@
     "sourceMap": false
   },
   "include": ["src"],
-  "exclude": ["src/cli.ts", "src/global.ts"]
+  "exclude": ["src/global.ts"]
 }

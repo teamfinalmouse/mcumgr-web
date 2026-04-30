@@ -7,7 +7,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM"],
-    "types": ["w3c-web-hid"]
+    "types": ["w3c-web-hid", "w3c-web-serial"]
   },
   "include": ["src", "tests"]
 }

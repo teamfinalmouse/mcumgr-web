@@ -19,6 +19,13 @@ export {
 } from './smp.js';
 export { type Transport } from './transport.js';
 export { WebHidTransport, type WebHidOptions } from './webhid.js';
+export { WebSerialTransport, type WebSerialOptions } from './webserial.js';
+export {
+  encodeFrame as encodeSerialFrame,
+  FrameParser as SerialFrameParser,
+  crc16Xmodem,
+  DEFAULT_LINELENGTH,
+} from './serial-frame.js';
 export {
   SLX_PRODUCT_ID,
   SLX_REPORT_ID_IN,

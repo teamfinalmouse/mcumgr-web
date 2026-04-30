@@ -1,31 +1,40 @@
 # mcumgr-web — Library Usage
 
-How to upload, install, reboot, and confirm a firmware image on an SLX MCUmgr-over-USB-HID device using the bundled library (`dist/mcumgr-web.js` ESM or `dist/mcumgr-web.iife.js` IIFE).
+How to upload, install, reboot, and confirm a firmware image on an SLX MCUmgr device using the bundled library (`dist/mcumgr-web.js` ESM or `dist/mcumgr-web.iife.js` IIFE).
 
-This guide focuses on the **browser** flow (WebHID). The Node flow (`node-hid`) is identical except for the transport.
+Two transports are supported:
+
+- **WebHID** — application firmware exposing the MCUmgr HID collection (running app, vendor HID).
+- **Web Serial** — MCUboot **serial recovery** mode (USB CDC-ACM). Used to recover a device that's stuck in bootloader, or to reflash without an app-level MCUmgr.
+
+The Node flow is identical except for the transport (`NodeHidTransport` / `NodeSerialTransport`).
 
 ## What's in the bundle
 
 The default ESM bundle exports:
 
 - `McuMgrClient` — generic MCUmgr command wrapper (echo, info, image list/upload/test/erase, reset, …).
-- `WebHidTransport` — HID transport implementation for browsers.
-- `SlxFirmwareUpdater` — high-level helper that upload + test + reset + reconnect + verify in one call.
+- `WebHidTransport` — HID transport for browsers.
+- `WebSerialTransport` — Web Serial transport for MCUboot serial recovery.
+- `SlxFirmwareUpdater` — high-level helper (HID): upload + test + reset + reconnect + verify in one call.
 - Helpers: `requestSlxDevice()`, `getGrantedSlxDevices()`, `getSlxDeviceFilters()`, `isSlxMcuMgrDevice()`.
 - IDs: `SLX_VENDOR_ID` (`0x361d`), `SLX_PRODUCT_ID` (`0x0300`), report IDs, usage tuple.
 - `McuMgrError` — thrown on transport / device errors. `.rc` carries the device return code if any.
+- Serial framing primitives: `encodeSerialFrame`, `SerialFrameParser`, `crc16Xmodem`, `DEFAULT_LINELENGTH`.
 
 ## Prerequisites
 
-- Browser with WebHID (Chrome/Edge desktop). Page must be served over HTTPS or `localhost`.
-- Device exposes the SLX MCUmgr HID collection (usage page `0xFF00`, usage `0x01`).
+- Browser with WebHID + Web Serial (Chrome/Edge desktop). Page served over HTTPS or `localhost`.
+- For HID: device exposes the SLX MCUmgr HID collection (usage page `0xFF00`, usage `0x01`).
+- For serial recovery: device enumerates as USB CDC-ACM in MCUboot recovery mode.
 
 ## Pick the right path
 
 | You want to… | Use |
 |---|---|
-| Drop-in firmware update on an SLX dongle/mouse | `SlxFirmwareUpdater` |
+| Drop-in firmware update on an SLX dongle/mouse (running app) | `SlxFirmwareUpdater` (HID) |
 | Custom flow / non-SLX device / individual commands | `McuMgrClient` + `WebHidTransport` |
+| Recover a bricked device via MCUboot serial recovery | `McuMgrClient` + `WebSerialTransport` |
 
 ---
 
@@ -150,6 +159,65 @@ await client.imageUpload(firmware, { signal: ctrl.signal });
 
 ---
 
+## Path C — MCUboot serial recovery (`WebSerialTransport`)
+
+Use when the device is in MCUboot recovery mode (USB CDC-ACM, no application running).
+
+**Key difference from HID/app flow:** there is **no test step**. Serial recovery `imageUpload` writes directly into the active slot — it overwrites the image in place. After `reset()`, the device boots straight into the new image. No `imageTest` / no swap / no revert.
+
+```js
+import {
+  WebSerialTransport,
+  McuMgrClient,
+} from './dist/mcumgr-web.js';
+
+// 1. User gesture → pick CDC-ACM port. Optionally filter by USB VID/PID.
+const port = await navigator.serial.requestPort({
+  filters: [{ usbVendorId: 0x361d /* , usbProductId: ... */ }],
+});
+
+// 2. Open the transport (defaults: 115200 baud, line length 128, MTU 256).
+const transport = await WebSerialTransport.fromPort(port, {
+  baudRate: 115200,
+});
+const client = new McuMgrClient(transport);
+
+try {
+  // 3. Upload — overwrites the current slot.
+  const firmware = new Uint8Array(
+    await (await fetch('zephyr.signed.bin')).arrayBuffer(),
+  );
+  await client.imageUpload(firmware, {
+    onProgress: (sent, total) => updateBar(sent / total),
+  });
+
+  // 4. Reset — device boots the freshly written image.
+  await client.reset();
+} finally {
+  await transport.close();
+}
+```
+
+Notes:
+
+- `imageList()` works in recovery and is useful for sanity checks (slot, version, hash). The bootloader's CBOR encoder may report a slightly truncated body; the transport tolerates this transparently.
+- `echo` / `taskstat` / `osInfo` typically return `rc=8` (NOT_SUPPORTED) — MCUboot only implements a subset of OS+image commands.
+- Serial recovery does **not** require `imageTest` or `imageConfirm`. Skip those calls; they don't apply.
+- MCUboot's recovery upload is slower than HID (small line-length, base64 framing, single-line ack). Expect tens of seconds for a typical image.
+- For Node, swap `WebSerialTransport` for `NodeSerialTransport` from the `mcumgr-web/node` entry point. Same `McuMgrClient` API.
+
+```js
+// Node equivalent
+import { NodeSerialTransport } from 'mcumgr-web/node';
+
+const transport = new NodeSerialTransport({ path: '/dev/ttyACM0' });
+await transport.ready();
+const client = new McuMgrClient(transport);
+// … same imageUpload + reset sequence
+```
+
+---
+
 ## Other useful commands on `McuMgrClient`
 
 ```js
@@ -195,8 +263,17 @@ For builds using SHA-512 image hashes, `ImageStateEntry.hash` is 64 bytes (128 h
 
 ## End-to-end checklist
 
+### App-mode update (HID)
+
 1. Build firmware → `zephyr.signed.bin` (signed by `imgtool sign`).
 2. Page served over `https://` or `localhost`.
 3. User clicks button → call `requestSlxDevice()` (must be in user-gesture handler).
 4. `new SlxFirmwareUpdater(device).updateFirmware(bytes, { onProgress, onPhaseChange })`.
 5. On resolved promise, the device is rebooted, reconnected, and running the new image.
+
+### Serial recovery (CDC-ACM)
+
+1. Put device in MCUboot recovery mode (board-specific: button held at boot, or after a brick).
+2. User clicks button → `navigator.serial.requestPort(...)` (user-gesture).
+3. `WebSerialTransport.fromPort(port)` → `client.imageUpload(bytes)` → `client.reset()`.
+4. Device boots into the freshly written image. No test/confirm step.
