@@ -29,7 +29,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "build:bundle": "bun build src/index.ts --outfile dist/mcumgr-web.js --target browser --format esm --minify && bun build src/global.ts --outfile dist/mcumgr-web.iife.js --target browser --format iife --minify",
+    "build:bundle": "esbuild src/index.ts --bundle --outfile=dist/mcumgr-web.js --format=esm --minify --platform=browser && esbuild src/global.ts --bundle --outfile=dist/mcumgr-web.iife.js --format=iife --minify --platform=browser",
     "build:all": "npm run build && npm run build:bundle",
     "cli": "node dist/cli.js",
     "package": "npm run build && npx @yao-pkg/pkg . --targets node22-linux-x64,node22-win-x64 --output mcumgr-web",
@@ -45,8 +45,10 @@
     "commander": "^13.1"
   },
   "devDependencies": {
+    "@types/node": "^22",
     "@types/w3c-web-hid": "^1.0.6",
     "@types/w3c-web-serial": "^1.0.7",
+    "esbuild": "^0.24",
     "node-hid": "^3.1",
     "serialport": "^12.0.0",
     "typescript": "^5.7",

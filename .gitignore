@@ -1,4 +1,8 @@
 node_modules/
 bun.lock
+package-lock.json
 COMMITMSG.txt
 mcumgr-web
+mcumgr-web-linux
+mcumgr-web-win.exe
+mcumgr-web-darwin-*

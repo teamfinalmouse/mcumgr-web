@@ -15,21 +15,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm install
 
       - name: Build typed ESM (tsc)
-        run: bun run build
+        run: npm run build
 
       - name: Build single-file bundles (ESM + IIFE)
-        run: bun run build:bundle
+        run: npm run build:bundle
 
       - name: Run unit tests
-        run: bun run test
+        run: npm test
 
       - name: Stage release files
         run: |
@@ -47,41 +47,37 @@ jobs:
 
   build-cli:
     name: Build CLI (${{ matrix.label }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - label: linux-x64
-            target: bun-linux-x64
-            ext: ""
-          - label: linux-arm64
-            target: bun-linux-arm64
-            ext: ""
-          - label: darwin-x64
-            target: bun-darwin-x64
-            ext: ""
-          - label: darwin-arm64
-            target: bun-darwin-arm64
+            runner: ubuntu-latest
+            target: node22-linux-x64
             ext: ""
           - label: windows-x64
-            target: bun-windows-x64
+            runner: ubuntu-latest
+            target: node22-win-x64
             ext: ".exe"
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm install
 
-      - name: Compile CLI
+      - name: Build dist
+        run: npm run build
+
+      - name: Package CLI
         run: |
-          bun build --compile --target=${{ matrix.target }} \
-            src/cli.ts \
-            --outfile mcumgr-web-${{ matrix.label }}${{ matrix.ext }}
+          npx --yes @yao-pkg/pkg . \
+            --targets ${{ matrix.target }} \
+            --output mcumgr-web-${{ matrix.label }}${{ matrix.ext }}
 
       - uses: actions/upload-artifact@v4
         with:
