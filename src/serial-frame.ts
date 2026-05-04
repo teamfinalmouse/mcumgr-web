@@ -132,19 +132,45 @@ export class FrameParser {
   private b64: string = '';
   private expectedTotal = 0;
   private completed: SmpResponse[] = [];
+  // First byte of a 2-byte frame marker that was the last byte of the previous
+  // push() chunk. USB CDC on Windows splits reads byte-by-byte, so we must
+  // remember a lone 0x06 / 0x04 across pushes.
+  private pendingMarker: 0x06 | 0x04 | 0 = 0;
 
   push(bytes: Uint8Array): void {
     for (let i = 0; i < bytes.length; i++) {
       const b = bytes[i];
       if (this.state === 'idle') {
-        if (b === FRAME_START[0] && i + 1 < bytes.length && bytes[i + 1] === FRAME_START[1]) {
-          this.state = 'collecting';
-          this.line = [];
-          this.b64 = '';
-          this.expectedTotal = 0;
-          i++;
-        } else if (b === FRAME_CONT[0] && i + 1 < bytes.length && bytes[i + 1] === FRAME_CONT[1]) {
-          if (this.b64.length > 0) {
+        if (this.pendingMarker !== 0) {
+          const m = this.pendingMarker;
+          this.pendingMarker = 0;
+          if (m === 0x06 && b === FRAME_START[1]) {
+            this.state = 'collecting';
+            this.line = [];
+            this.b64 = '';
+            this.expectedTotal = 0;
+            continue;
+          }
+          if (m === 0x04 && b === FRAME_CONT[1] && this.b64.length > 0) {
+            this.state = 'collecting';
+            this.line = [];
+            continue;
+          }
+          // Pending marker didn't pair — fall through to evaluate b fresh.
+        }
+        if (b === FRAME_START[0] || b === FRAME_CONT[0]) {
+          if (i + 1 >= bytes.length) {
+            this.pendingMarker = b as 0x06 | 0x04;
+            break;
+          }
+          const next = bytes[i + 1];
+          if (b === FRAME_START[0] && next === FRAME_START[1]) {
+            this.state = 'collecting';
+            this.line = [];
+            this.b64 = '';
+            this.expectedTotal = 0;
+            i++;
+          } else if (b === FRAME_CONT[0] && next === FRAME_CONT[1] && this.b64.length > 0) {
             this.state = 'collecting';
             this.line = [];
             i++;
@@ -214,5 +240,6 @@ export class FrameParser {
     this.b64 = '';
     this.expectedTotal = 0;
     this.completed = [];
+    this.pendingMarker = 0;
   }
 }
